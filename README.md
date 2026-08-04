@@ -128,8 +128,7 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 | Selection background | ▪ | `#585B70` |
 | Comment / dim foreground | ▪ | `#6C7086` |
 
-Full palette (all 26 colors):
-<https://raw.githubusercontent.com/catppuccin/catppuccin/main/docs/assets/palette.png>
+Full palette (all 26 colors): <https://catppuccin.com/palette/>
 and as JSON: <https://raw.githubusercontent.com/catppuccin/palette/main/palette.json>
 
 ## Rollback

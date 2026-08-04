@@ -114,8 +114,7 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 | 选区背景 | ▪ | `#585B70` |
 | 注释/暗前景 | ▪ | `#6C7086` |
 
-完整调色板(全部 26 色)见:
-<https://raw.githubusercontent.com/catppuccin/catppuccin/main/docs/assets/palette.png>
+完整调色板(全部 26 色)见: <https://catppuccin.com/palette/>
 以及 JSON 形式:<https://raw.githubusercontent.com/catppuccin/palette/main/palette.json>
 
 ## 回滚
