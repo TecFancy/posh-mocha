@@ -93,9 +93,27 @@ Write-Step "Catppuccin Mocha oh-my-posh theme"
 $configDir = "$HOME\.config\oh-my-posh"
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 $themeFile = Join-Path $configDir 'catppuccin_mocha.omp.json'
-Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/catppuccin_mocha.omp.json' `
-    -OutFile $themeFile -UseBasicParsing
-Write-Ok "Theme saved to $themeFile"
+if (Test-Path $themeFile) {
+    Write-Ok "Theme already present at $themeFile"
+} else {
+    # Fetched from cdn.ohmyposh.dev (same CDN used by `oh-my-posh font install`)
+    # instead of raw.githubusercontent.com, since GitHub itself is often
+    # unreachable/times out from some networks while this CDN stays up.
+    $zipPath = Join-Path $env:TEMP 'oh-my-posh-themes.zip'
+    $tempDir = Join-Path $env:TEMP "oh-my-posh-themes-$([guid]::NewGuid())"
+    try {
+        Invoke-WebRequest -Uri 'https://cdn.ohmyposh.dev/releases/latest/themes.zip' `
+            -OutFile $zipPath -UseBasicParsing -TimeoutSec 15
+        Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+        Copy-Item -Path (Join-Path $tempDir 'catppuccin_mocha.omp.json') -Destination $themeFile -Force
+        Write-Ok "Theme saved to $themeFile"
+    } catch {
+        Write-Warn2 "Could not download the theme from cdn.ohmyposh.dev ($($_.Exception.Message))."
+        Write-Warn2 "Save it manually as $themeFile — download the theme pack from https://ohmyposh.dev/docs/themes, or copy catppuccin_mocha.omp.json out of an existing oh-my-posh install's theme cache (run 'oh-my-posh cache path' to find it)\themes."
+    } finally {
+        Remove-Item -Path $zipPath, $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 
 # --- 6. PowerShell profile ---
 Write-Step "PowerShell profile ($PROFILE)"
