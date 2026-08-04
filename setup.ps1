@@ -8,6 +8,10 @@
     Idempotent — safe to re-run. Backs up any file it overwrites before
     touching it (PowerShell profile, Windows Terminal settings.json).
 
+    Mirror of setup-linux.sh (the bash/Debian-Ubuntu version for remote
+    servers) — same theme, same step order. Keep the two in sync when
+    editing either one.
+
 .PARAMETER SkipWindowsTerminal
     Skip patching Windows Terminal's settings.json. Use this if you only
     want the PowerShell-side setup (profile, prompt, CLI tools).
