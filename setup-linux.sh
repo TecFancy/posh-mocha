@@ -10,7 +10,7 @@
 # Idempotent — safe to re-run. Backs up ~/.bashrc before touching it.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/main/setup-linux.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-linux.sh | bash
 #   # or, copy the file over first and run: bash setup-linux.sh
 
 set -uo pipefail

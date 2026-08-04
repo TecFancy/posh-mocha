@@ -68,7 +68,7 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 但你连接用的*客户端*终端仍然需要 Nerd Font,这部分由本地的 `setup.ps1` 负责:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/main/setup-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-linux.sh | bash
 ```
 
 如果服务器连不上 `raw.githubusercontent.com`,改成先把文件传过去

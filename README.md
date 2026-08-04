@@ -75,7 +75,7 @@ to patch there, but the *client* terminal you're connecting from still
 needs the Nerd Font, which `setup.ps1` installs locally:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/main/setup-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-linux.sh | bash
 ```
 
 If the server can't reach `raw.githubusercontent.com`, copy the file over
