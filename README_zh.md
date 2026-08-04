@@ -38,7 +38,7 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1
 - Windows 10 1809+ / Windows 11
 - 已安装 `winget`(自带 App Installer;如果没有,先去 Microsoft Store 装 "App Installer")
 - 已安装 Windows Terminal(Microsoft Store 版或 winget 版均可)
-- 网络能访问 GitHub raw 内容(用于下载 oh-my-posh 主题 json 和字体)
+- 网络能访问 `cdn.ohmyposh.dev`(下载主题和字体)以及 `winget` 配置的软件源
 
 ## 一键部署
 
@@ -61,6 +61,24 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 ```
+
+## 远程服务器(Linux / bash)
+
+对于 SSH 上去的 Debian/Ubuntu 服务器 —— 那边没有 Windows Terminal 配色可改,
+但你连接用的*客户端*终端仍然需要 Nerd Font,这部分由本地的 `setup.ps1` 负责:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/main/setup-linux.sh | bash
+```
+
+如果服务器连不上 `raw.githubusercontent.com`,改成先把文件传过去
+(例如 `scp setup-linux.sh myserver:/tmp/`)再执行 `bash setup-linux.sh`。
+
+这个脚本通过 `apt` 安装 oh-my-posh(同一套 Catppuccin Mocha 主题,从
+`cdn.ohmyposh.dev` 而非 GitHub 下载)、zoxide、eza、fzf,并把它们接入
+`~/.bashrc` 里一个带标记的配置块。幂等 —— 修改前会备份 `~/.bashrc`,
+重复执行时会替换(而不是重复追加)自己那一块。具体细节见
+`setup-linux.sh` 开头的注释,步骤顺序和 `setup.ps1` 保持一致。
 
 ## 脚本做了什么(幂等,可重复执行)
 
@@ -126,3 +144,6 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 - Nerd Font:在"设置 → 字体"里搜索 "CaskaydiaCove" 逐个卸载,或运行
   `oh-my-posh font install` 的反向操作(oh-my-posh 本身不提供卸载命令,手动删除
   字体文件即可)。
+- `setup-linux.sh`(远程服务器):用它生成的 `.bak-时间戳` 备份覆盖回
+  `~/.bashrc`,再执行 `sudo apt remove zoxide eza fzf` 和
+  `rm ~/.local/bin/oh-my-posh`。

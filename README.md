@@ -42,7 +42,7 @@ the user verbatim — don't silently ignore it or guess how to handle it (see
 - Windows 10 1809+ / Windows 11
 - `winget` installed (bundled with App Installer; if missing, install "App Installer" from the Microsoft Store first)
 - Windows Terminal installed (Microsoft Store or winget build, either works)
-- Network access to GitHub raw content (used to download the oh-my-posh theme json and the font)
+- Network access to `cdn.ohmyposh.dev` (theme + font download) and whatever sources `winget` is configured to use
 
 ## One-click deploy
 
@@ -67,6 +67,27 @@ the user verbatim — don't silently ignore it or guess how to handle it (see
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\setup.ps1 -SkipWindowsTerminal
 ```
+
+## Remote servers (Linux / bash)
+
+For Debian/Ubuntu servers you SSH into — there's no Windows Terminal side
+to patch there, but the *client* terminal you're connecting from still
+needs the Nerd Font, which `setup.ps1` installs locally:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/main/setup-linux.sh | bash
+```
+
+If the server can't reach `raw.githubusercontent.com`, copy the file over
+first instead (e.g. `scp setup-linux.sh myserver:/tmp/`) and run
+`bash setup-linux.sh`.
+
+It installs oh-my-posh (same Catppuccin Mocha theme, fetched from
+`cdn.ohmyposh.dev` rather than GitHub), zoxide, eza and fzf via `apt`, and
+wires them into `~/.bashrc` inside a marked block. Idempotent — backs up
+`~/.bashrc` before touching it, and replaces (rather than duplicates) its
+own block on every re-run. See `setup-linux.sh`'s header comment for
+details; it mirrors `setup.ps1`'s step order.
 
 ## What the script does (idempotent, safe to re-run)
 
@@ -141,6 +162,9 @@ and as JSON: <https://raw.githubusercontent.com/catppuccin/palette/main/palette.
 - Nerd Font: search "CaskaydiaCove" under Settings → Fonts and remove each
   one, or manually delete the font files (oh-my-posh itself doesn't ship an
   uninstall command for fonts).
+- `setup-linux.sh` (remote servers): overwrite `~/.bashrc` with its
+  `.bak-timestamp` backup, then `sudo apt remove zoxide eza fzf` and
+  `rm ~/.local/bin/oh-my-posh`.
 
 ## License
 
