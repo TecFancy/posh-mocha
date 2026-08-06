@@ -30,7 +30,7 @@ the user verbatim — don't silently ignore it or guess how to handle it (see
 | Component | Purpose |
 | --- | --- |
 | [oh-my-posh](https://ohmyposh.dev/) | PowerShell prompt engine, loads the Catppuccin Mocha theme |
-| CaskaydiaCove Nerd Font | Icon font required by the prompt (Nerd Font build of Cascadia Code) |
+| [Maple Mono NF CN](https://github.com/subframe7536/maple-font) | Monospace font with prompt icons + Chinese glyphs (see "Fonts and Chinese text" below); falls back to Latin-only CaskaydiaCove Nerd Font without admin rights |
 | PSReadLine | Command-line syntax highlighting + history prediction (built-in module, just configured) |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | `z <dirname>` smart jump, remembers frequently-used paths |
 | [eza](https://github.com/eza-community/eza) | Icon-enabled `ls` replacement, takes over `ls`/`ll`/`la`/`lt` |
@@ -42,7 +42,11 @@ the user verbatim — don't silently ignore it or guess how to handle it (see
 - Windows 10 1809+ / Windows 11
 - `winget` installed (bundled with App Installer; if missing, install "App Installer" from the Microsoft Store first)
 - Windows Terminal installed (Microsoft Store or winget build, either works)
-- Network access to `cdn.ohmyposh.dev` (theme + font download) and whatever sources `winget` is configured to use
+- Network access to `cdn.ohmyposh.dev` (theme download), `github.com` (Chinese Nerd Font download), and whatever sources `winget` is configured to use
+- For Chinese text to render correctly, open PowerShell **as Administrator**
+  before running the script (see "Fonts and Chinese text" below). It still
+  runs fine without admin rights — the font just falls back to a
+  Latin-only build.
 
 ## One-click deploy
 
@@ -94,7 +98,15 @@ details; it mirrors `setup.ps1`'s step order.
 1. Checks that `winget` exists; errors out if it doesn't.
 2. Checks for / installs PowerShell 7 (pwsh).
 3. Installs oh-my-posh, zoxide, fzf, eza via `winget` (skips any that are already installed).
-4. Installs the Nerd Font with `oh-my-posh font install CascadiaCode` (skips if already installed).
+4. Installs the font (skips if already installed):
+   - **Elevated**: downloads `Maple Mono NF CN` from GitHub, installs it
+     system-wide (`C:\Windows\Fonts` + `HKLM` registration), restarts the
+     font cache service, and broadcasts a font-change notification so
+     every app in the current session — including packaged apps like
+     Windows Terminal — picks it up immediately.
+   - **Not elevated**: falls back to `oh-my-posh font install CascadiaCode`
+     (Latin-only Nerd Font) and prints a WARN that Chinese text will look
+     mismatched.
 5. Installs the PSFzf module (skips if already installed).
 6. Downloads the official oh-my-posh Catppuccin Mocha theme json to `~\.config\oh-my-posh\`.
 7. Copies `Microsoft.PowerShell_profile.ps1` to whatever path `$PROFILE` points to.
@@ -132,6 +144,37 @@ details; it mirrors `setup.ps1`'s step order.
   boxes, just point that one program's font setting back to plain
   `Cascadia Code` (without the Nerd Font suffix) — it won't affect anything else.
 
+## Fonts and Chinese text
+
+**Root cause**: plain Nerd Fonts like CaskaydiaCove ship zero Chinese
+glyphs, so Windows silently falls back to a different system CJK font for
+Chinese text — mismatched weight/width against the Latin glyphs, which also
+throws off oh-my-posh's segment alignment. `Maple Mono NF CN` merges Nerd
+Font icons and width-matched Chinese glyphs into one family, fixing this at
+the root.
+
+**Font installed but Windows Terminal still says "font not found"**:
+Windows Terminal is a packaged (MSIX/AppContainer) app — it can only see
+fonts installed system-wide (`C:\Windows\Fonts` + `HKLM` registration), not
+a per-user-only ("install for me") font, even if the file is genuinely on
+disk and `AddFontResourceEx` already loaded it into the current session.
+That's why the font step in `setup.ps1` needs admin rights to take the
+system-wide path — without it, the script falls back to the Latin-only
+CaskaydiaCove Nerd Font and prints a WARN.
+
+If Windows Terminal still complains after a system-wide install: fully
+close every Windows Terminal window and reopen. If that doesn't help,
+restart the Windows Font Cache service (`Restart-Service FontCache` — the
+script already does this automatically) or sign out and back in to force a
+full refresh.
+
+**Chinese text also looks wrong over SSH into a Linux server?** That's
+unrelated to `setup-linux.sh` — font rendering happens entirely on the
+*client* side (your local Windows Terminal), whether you're in a local
+PowerShell tab or SSH'd into a remote box. Running `setup.ps1` once
+(elevated) fixes both the local and remote case; `setup-linux.sh` needs no
+changes.
+
 ## Catppuccin Mocha palette reference (for manually aligning other tools)
 
 | Use | Swatch | HEX |
@@ -159,9 +202,12 @@ and as JSON: <https://raw.githubusercontent.com/catppuccin/palette/main/palette.
   `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json`
   with its `settings.json.bak-timestamp` backup.
 - CLI tools (oh-my-posh/zoxide/eza/fzf): `winget uninstall --id <package ID>`.
-- Nerd Font: search "CaskaydiaCove" under Settings → Fonts and remove each
-  one, or manually delete the font files (oh-my-posh itself doesn't ship an
-  uninstall command for fonts).
+- Nerd Font: `Maple Mono NF CN` was installed system-wide — search
+  "Maple Mono NF CN" under Settings → Fonts and remove it there (this also
+  cleans up the `HKLM` registration and the files under
+  `C:\Windows\Fonts`). The fallback `CaskaydiaCove` build is a per-user
+  install — same removal path under Settings → Fonts (oh-my-posh itself
+  doesn't ship an uninstall command).
 - `setup-linux.sh` (remote servers): overwrite `~/.bashrc` with its
   `.bak-timestamp` backup, then `sudo apt remove zoxide eza fzf` and
   `rm ~/.local/bin/oh-my-posh`.

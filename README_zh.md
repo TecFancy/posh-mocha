@@ -26,7 +26,7 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1
 | 组件 | 作用 |
 | --- | --- |
 | [oh-my-posh](https://ohmyposh.dev/) | PowerShell 提示符引擎,加载 Catppuccin Mocha 主题 |
-| CaskaydiaCove Nerd Font | 提示符图标所需的字体(Cascadia Code 的 Nerd Font 版本) |
+| [Maple Mono NF CN](https://github.com/subframe7536/maple-font) | 提示符图标 + 中文字形的等宽字体(见下面"字体与中文显示"),没有管理员权限时会回退成纯拉丁字符的 CaskaydiaCove Nerd Font |
 | PSReadLine | 命令行语法高亮 + 历史预测(内置模块,只做配置) |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | `z <目录名>` 智能跳转,记住常用路径 |
 | [eza](https://github.com/eza-community/eza) | 带图标的 `ls` 替代品,接管 `ls`/`ll`/`la`/`lt` |
@@ -38,7 +38,9 @@ pwsh -ExecutionPolicy Bypass -File .\setup.ps1
 - Windows 10 1809+ / Windows 11
 - 已安装 `winget`(自带 App Installer;如果没有,先去 Microsoft Store 装 "App Installer")
 - 已安装 Windows Terminal(Microsoft Store 版或 winget 版均可)
-- 网络能访问 `cdn.ohmyposh.dev`(下载主题和字体)以及 `winget` 配置的软件源
+- 网络能访问 `cdn.ohmyposh.dev`(下载主题)、`github.com`(下载中文 Nerd Font)以及 `winget` 配置的软件源
+- 想要中文正常显示,需要用**管理员身份**打开 PowerShell 窗口再运行脚本(原因见下面
+  "字体与中文显示")。不用管理员也能跑,只是字体会回退成纯拉丁字符版本。
 
 ## 一键部署
 
@@ -85,7 +87,13 @@ curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-li
 1. 检查 `winget` 是否存在,没有则报错退出。
 2. 检查/安装 PowerShell 7(pwsh)。
 3. 通过 `winget` 安装 oh-my-posh、zoxide、fzf、eza(已安装则跳过)。
-4. 用 `oh-my-posh font install CascadiaCode` 装 Nerd Font(已装则跳过)。
+4. 装字体(已装则跳过):
+   - **管理员权限**:从 GitHub 下载 `Maple Mono NF CN`,系统级安装到
+     `C:\Windows\Fonts` + 注册到 `HKLM`,重启字体缓存服务并广播字体变更
+     通知,让当前会话里的所有程序(包括 Windows Terminal 这类打包应用)
+     立即能识别到。
+   - **非管理员**:回退用 `oh-my-posh font install CascadiaCode` 装纯拉丁
+     字符的 Nerd Font,并打印 WARN 提示中文会显示不一致。
 5. 安装 PSFzf 模块(已装则跳过)。
 6. 下载 oh-my-posh 官方 Catppuccin Mocha 主题 json 到 `~\.config\oh-my-posh\`。
 7. 把 `Microsoft.PowerShell_profile.ps1` 复制到 `$PROFILE` 指向的路径。
@@ -115,6 +123,32 @@ curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-li
   不好,如果遇到方块乱码,把该程序的字体单独设回 `Cascadia Code`(不带 Nerd
   Font 后缀的原版)即可,不影响其他地方。
 
+## 字体与中文显示
+
+**根因**:CaskaydiaCove 之类的纯 Nerd Font 不含中文字形,终端遇到中文字符时会
+自动 fallback 到系统默认中文字体,导致中英文字重、宽度不一致,连带把
+oh-my-posh 的分段对齐、竖线都弄歪。`Maple Mono NF CN` 把 Nerd Font 图标和
+等宽对齐的中文字形合并进同一个字体家族,从根上解决这个问题。
+
+**装好字体但 Windows Terminal 还是报"找不到字体"**:Windows Terminal 是打包
+(MSIX/AppContainer)应用,只能看到系统级("为所有用户安装",装到
+`C:\Windows\Fonts` + 注册在 `HKLM`)的字体,看不到仅当前用户级("为我安装",
+只在 `HKCU` 注册)的字体 —— 哪怕字体文件确实已经复制到磁盘上、哪怕
+`AddFontResourceEx` 已经把它加载进了当前会话。这也是为什么 `setup.ps1`
+的字体安装步骤需要管理员权限才会走系统级安装路径;非管理员运行时会自动
+回退成仅拉丁字符的 CaskaydiaCove Nerd Font,并打印 WARN 提示。
+
+如果系统级装完之后 Windows Terminal 依然弹"找不到字体": 完全关闭所有
+Windows Terminal 窗口重新打开;如果还不行,重启一次"Windows 字体缓存服务"
+(`Restart-Service FontCache`,脚本里已经会自动做这一步),或者直接注销
+重新登录一次让系统彻底刷新。
+
+**SSH 到 Linux 服务器时中文显示也不对?** 这和 `setup-linux.sh` 无关 ——
+字体渲染完全发生在*客户端*(也就是本机的 Windows Terminal),不管你是在本地
+PowerShell 还是 SSH 到远程服务器,显示用的都是本机装好的这套字体。把
+`setup.ps1` 跑一遍(管理员权限)就同时解决了本地和远程两种场景,
+`setup-linux.sh` 不需要做任何改动。
+
 ## Catppuccin Mocha 色值参考(用于手动对齐其他工具)
 
 | 用途 | 颜色 | HEX |
@@ -141,9 +175,10 @@ curl -fsSL https://raw.githubusercontent.com/TecFancy/posh-mocha/master/setup-li
 - Windows Terminal:用 `settings.json.bak-时间戳` 覆盖回
   `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json`。
 - CLI 工具(oh-my-posh/zoxide/eza/fzf):`winget uninstall --id <包 ID>`。
-- Nerd Font:在"设置 → 字体"里搜索 "CaskaydiaCove" 逐个卸载,或运行
-  `oh-my-posh font install` 的反向操作(oh-my-posh 本身不提供卸载命令,手动删除
-  字体文件即可)。
+- Nerd Font:`Maple Mono NF CN` 是系统级安装的,直接在"设置 → 字体"里搜索
+  "Maple Mono NF CN" 逐个卸载即可(会自动清理 `HKLM` 注册项和
+  `C:\Windows\Fonts` 下的文件)。回退场景装的 `CaskaydiaCove` 是当前用户级
+  安装,同样在"设置 → 字体"里搜索卸载(oh-my-posh 本身不提供卸载命令)。
 - `setup-linux.sh`(远程服务器):用它生成的 `.bak-时间戳` 备份覆盖回
   `~/.bashrc`,再执行 `sudo apt remove zoxide eza fzf` 和
   `rm ~/.local/bin/oh-my-posh`。

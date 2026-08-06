@@ -2,7 +2,8 @@
 .SYNOPSIS
     One-click setup for PowerShell + Windows Terminal beautification
     (oh-my-posh Catppuccin Mocha theme, PSReadLine, zoxide, eza, fzf,
-    Nerd Font, Windows Terminal Catppuccin Mocha + acrylic transparency).
+    a CJK-capable Nerd Font, Windows Terminal Catppuccin Mocha + acrylic
+    transparency).
 
 .DESCRIPTION
     Idempotent — safe to re-run. Backs up any file it overwrites before
@@ -71,16 +72,89 @@ foreach ($p in $packages) {
 $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'User') + ';' +
             [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
 
-# --- 3. Nerd Font (CaskaydiaCove) ---
-Write-Step "Nerd Font (CaskaydiaCove)"
-$fontAlreadyThere = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts' -ErrorAction SilentlyContinue |
-    ForEach-Object { $_.PSObject.Properties.Name } |
-    Where-Object { $_ -like 'CaskaydiaCove*' }
-if ($fontAlreadyThere) {
-    Write-Ok "CaskaydiaCove Nerd Font already installed"
+# --- 3. Nerd Font with CJK glyphs (Maple Mono NF CN) ---
+Write-Step "Nerd Font (Maple Mono NF CN)"
+# Plain Nerd Fonts like CaskaydiaCove ship zero Chinese glyphs, so Windows
+# silently falls back to a different system CJK font for Chinese text —
+# mismatched weight/width vs. the Latin glyphs, which breaks oh-my-posh's
+# segment alignment. Maple Mono NF CN bundles Nerd Font icons AND
+# width-matched CJK glyphs in one family, so Latin + Chinese render
+# consistently. Source: https://github.com/subframe7536/maple-font
+#
+# Windows Terminal is a packaged (MSIX/AppContainer) app — it can't see a
+# per-user-only ("install for me") font, only one installed system-wide
+# (C:\Windows\Fonts + HKLM registration). That install path needs admin
+# rights, so this step falls back to the Latin-only CaskaydiaCove Nerd
+# Font when not running elevated.
+Add-Type -AssemblyName System.Drawing
+$targetFont = 'Maple Mono NF CN'
+$fallbackFont = 'CaskaydiaCove Nerd Font Mono'
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$installedFamilies = (New-Object System.Drawing.Text.InstalledFontCollection).Families.Name
+
+if ($installedFamilies -contains $targetFont) {
+    Write-Ok "$targetFont already installed"
+    $PromptFont = $targetFont
+} elseif (-not $isAdmin) {
+    Write-Warn2 "Not running elevated — Windows Terminal won't see a per-user-only font install, so installing $targetFont system-wide needs Administrator rights."
+    Write-Warn2 "Falling back to $fallbackFont (Latin-only; Chinese text will render in a mismatched fallback font). Re-run this script from an elevated PowerShell to get $targetFont instead."
+    if ($installedFamilies -contains $fallbackFont) {
+        Write-Ok "$fallbackFont already installed"
+    } else {
+        oh-my-posh font install CascadiaCode
+        Write-Ok "$fallbackFont installed"
+    }
+    $PromptFont = $fallbackFont
 } else {
-    oh-my-posh font install CascadiaCode
-    Write-Ok "Font installed"
+    $zipPath = Join-Path $env:TEMP 'MapleMono-NF-CN.zip'
+    $extractDir = Join-Path $env:TEMP "MapleMono-NF-CN-$([guid]::NewGuid())"
+    try {
+        Invoke-WebRequest -Uri 'https://github.com/subframe7536/maple-font/releases/latest/download/MapleMono-NF-CN.zip' `
+            -OutFile $zipPath -UseBasicParsing -TimeoutSec 60
+        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+        Add-Type -MemberDefinition @'
+[DllImport("gdi32.dll")]
+public static extern int AddFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
+[DllImport("user32.dll", SetLastError=true)]
+public static extern bool SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@ -Name Win32Font -Namespace PoshMocha -PassThru | Out-Null
+
+        $fontsDir = "$env:WINDIR\Fonts"
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+        Get-ChildItem -Path $extractDir -Recurse -Include *.ttf | ForEach-Object {
+            $dest = Join-Path $fontsDir $_.Name
+            Copy-Item -Path $_.FullName -Destination $dest -Force
+
+            $fc = New-Object System.Drawing.Text.PrivateFontCollection
+            $fc.AddFontFile($dest)
+            $familyName = $fc.Families[0].Name
+            $fc.Dispose()
+
+            # A family can span several files (Regular/Bold/Italic/...);
+            # keep prior filenames for the same family name instead of
+            # clobbering them.
+            $valueName = "$familyName (TrueType)"
+            $existing = (Get-ItemProperty -Path $regPath -Name $valueName -ErrorAction SilentlyContinue).$valueName
+            $newValue = if ($existing -and $existing -notlike "*$($_.Name)*") { "$existing,$($_.Name)" } else { $_.Name }
+            New-ItemProperty -Path $regPath -Name $valueName -Value $newValue -PropertyType String -Force | Out-Null
+
+            [PoshMocha.Win32Font]::AddFontResourceEx($dest, 0, [IntPtr]::Zero) | Out-Null
+        }
+
+        Restart-Service -Name FontCache -Force -ErrorAction SilentlyContinue
+        $broadcastResult = [UIntPtr]::Zero
+        [PoshMocha.Win32Font]::SendMessageTimeout([IntPtr]0xffff, 0x001D, [UIntPtr]::Zero, [IntPtr]::Zero, 2, 5000, [ref]$broadcastResult) | Out-Null
+
+        Write-Ok "$targetFont installed system-wide"
+        $PromptFont = $targetFont
+    } catch {
+        Write-Warn2 "Could not install $targetFont ($($_.Exception.Message)). Falling back to $fallbackFont."
+        oh-my-posh font install CascadiaCode
+        $PromptFont = $fallbackFont
+    } finally {
+        Remove-Item -Path $zipPath, $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # --- 4. PSFzf module (fzf <-> PSReadLine integration) ---
@@ -182,7 +256,7 @@ if ($SkipWindowsTerminal) {
                 $json.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([pscustomobject]@{}) -Force
             }
             $json.profiles.defaults | Add-Member -NotePropertyName colorScheme -NotePropertyValue $schemeName -Force
-            $json.profiles.defaults | Add-Member -NotePropertyName font -NotePropertyValue ([pscustomobject]@{ face = 'CaskaydiaCove Nerd Font Mono' }) -Force
+            $json.profiles.defaults | Add-Member -NotePropertyName font -NotePropertyValue ([pscustomobject]@{ face = $PromptFont }) -Force
             $json.profiles.defaults | Add-Member -NotePropertyName opacity -NotePropertyValue 82 -Force
             $json.profiles.defaults | Add-Member -NotePropertyName useAcrylic -NotePropertyValue $true -Force
 
@@ -207,3 +281,6 @@ if ($SkipWindowsTerminal) {
 
 Write-Step 'Done'
 Write-Host 'Fully close and reopen Windows Terminal to see the new theme, font and transparency.' -ForegroundColor Magenta
+if ($PromptFont -eq $fallbackFont) {
+    Write-Warn2 "Prompt font is $fallbackFont (Latin-only) — Chinese text will look mismatched. Re-run this script from an elevated PowerShell to switch to $targetFont."
+}
