@@ -81,30 +81,21 @@ Write-Step "Nerd Font (Maple Mono NF CN)"
 # width-matched CJK glyphs in one family, so Latin + Chinese render
 # consistently. Source: https://github.com/subframe7536/maple-font
 #
-# Windows Terminal is a packaged (MSIX/AppContainer) app — it can't see a
-# per-user-only ("install for me") font, only one installed system-wide
-# (C:\Windows\Fonts + HKLM registration). That install path needs admin
-# rights, so this step falls back to the Latin-only CaskaydiaCove Nerd
-# Font when not running elevated.
+# Installed per-user (%LOCALAPPDATA%\Microsoft\Windows\Fonts + HKCU
+# registration), same mechanism `oh-my-posh font install` already uses for
+# the fallback font below. No admin rights needed, and packaged apps like
+# Windows Terminal pick it up immediately — unlike a system-wide install
+# (C:\Windows\Fonts + HKLM), which on some machines only gets read into the
+# session's font table at the *next* sign-out/reboot, and sometimes not
+# even then, which made that path unreliable for a one-shot script.
 Add-Type -AssemblyName System.Drawing
 $targetFont = 'Maple Mono NF CN'
-$fallbackFont = 'CaskaydiaCove Nerd Font Mono'
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$fallbackFont = 'CaskaydiaCove NFM'
 $installedFamilies = (New-Object System.Drawing.Text.InstalledFontCollection).Families.Name
 
 if ($installedFamilies -contains $targetFont) {
     Write-Ok "$targetFont already installed"
     $PromptFont = $targetFont
-} elseif (-not $isAdmin) {
-    Write-Warn2 "Not running elevated — Windows Terminal won't see a per-user-only font install, so installing $targetFont system-wide needs Administrator rights."
-    Write-Warn2 "Falling back to $fallbackFont (Latin-only; Chinese text will render in a mismatched fallback font). Re-run this script from an elevated PowerShell to get $targetFont instead."
-    if ($installedFamilies -contains $fallbackFont) {
-        Write-Ok "$fallbackFont already installed"
-    } else {
-        oh-my-posh font install CascadiaCode
-        Write-Ok "$fallbackFont installed"
-    }
-    $PromptFont = $fallbackFont
 } else {
     $zipPath = Join-Path $env:TEMP 'MapleMono-NF-CN.zip'
     $extractDir = Join-Path $env:TEMP "MapleMono-NF-CN-$([guid]::NewGuid())"
@@ -114,16 +105,17 @@ if ($installedFamilies -contains $targetFont) {
         Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
         Add-Type -MemberDefinition @'
-[DllImport("gdi32.dll")]
+[DllImport("gdi32.dll", CharSet=CharSet.Unicode)]
 public static extern int AddFontResourceEx(string lpszFilename, uint fl, IntPtr pdv);
 [DllImport("user32.dll", SetLastError=true)]
 public static extern bool SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
 '@ -Name Win32Font -Namespace PoshMocha -PassThru | Out-Null
 
-        $fontsDir = "$env:WINDIR\Fonts"
-        $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+        $userFontsDir = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
+        New-Item -ItemType Directory -Path $userFontsDir -Force | Out-Null
+        $regPath = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
         Get-ChildItem -Path $extractDir -Recurse -Include *.ttf | ForEach-Object {
-            $dest = Join-Path $fontsDir $_.Name
+            $dest = Join-Path $userFontsDir $_.Name
             Copy-Item -Path $_.FullName -Destination $dest -Force
 
             $fc = New-Object System.Drawing.Text.PrivateFontCollection
@@ -133,20 +125,20 @@ public static extern bool SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wPar
 
             # A family can span several files (Regular/Bold/Italic/...);
             # keep prior filenames for the same family name instead of
-            # clobbering them.
+            # clobbering them. Per-user entries need the full path (a bare
+            # filename resolves against C:\Windows\Fonts instead).
             $valueName = "$familyName (TrueType)"
             $existing = (Get-ItemProperty -Path $regPath -Name $valueName -ErrorAction SilentlyContinue).$valueName
-            $newValue = if ($existing -and $existing -notlike "*$($_.Name)*") { "$existing,$($_.Name)" } else { $_.Name }
+            $newValue = if ($existing -and $existing -notlike "*$dest*") { "$existing,$dest" } else { $dest }
             New-ItemProperty -Path $regPath -Name $valueName -Value $newValue -PropertyType String -Force | Out-Null
 
             [PoshMocha.Win32Font]::AddFontResourceEx($dest, 0, [IntPtr]::Zero) | Out-Null
         }
 
-        Restart-Service -Name FontCache -Force -ErrorAction SilentlyContinue
         $broadcastResult = [UIntPtr]::Zero
         [PoshMocha.Win32Font]::SendMessageTimeout([IntPtr]0xffff, 0x001D, [UIntPtr]::Zero, [IntPtr]::Zero, 2, 5000, [ref]$broadcastResult) | Out-Null
 
-        Write-Ok "$targetFont installed system-wide"
+        Write-Ok "$targetFont installed for current user"
         $PromptFont = $targetFont
     } catch {
         Write-Warn2 "Could not install $targetFont ($($_.Exception.Message)). Falling back to $fallbackFont."
@@ -282,5 +274,5 @@ if ($SkipWindowsTerminal) {
 Write-Step 'Done'
 Write-Host 'Fully close and reopen Windows Terminal to see the new theme, font and transparency.' -ForegroundColor Magenta
 if ($PromptFont -eq $fallbackFont) {
-    Write-Warn2 "Prompt font is $fallbackFont (Latin-only) — Chinese text will look mismatched. Re-run this script from an elevated PowerShell to switch to $targetFont."
+    Write-Warn2 "Prompt font is $fallbackFont (Latin-only) — Chinese text will look mismatched. Check your network connection and re-run this script to try installing $targetFont again."
 }
